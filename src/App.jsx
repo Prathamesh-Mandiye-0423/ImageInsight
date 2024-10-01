@@ -1,24 +1,40 @@
+import React, { useState } from "react";
 import { GoogleGenerativeAI } from "@google/generative-ai";
-import { useState } from "react";
 import { ToastContainer, toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
-import "./App.css";
-import { Container, Box } from "@chakra-ui/react";
-import Header from "./components/Header";
-import { Button, Input } from "@chakra-ui/react";
-import KeywordsModal from "./components/KeywordsModal";
+import {
+  ChakraProvider,
+  Container,
+  Box,
+  VStack,
+  Heading,
+  Text,
+  Button,
+  Input,
+  Image,
+  useColorModeValue,
+  Modal,
+  ModalOverlay,
+  ModalContent,
+  ModalHeader,
+  ModalBody,
+  ModalCloseButton,
+  Icon,
+} from "@chakra-ui/react";
+import { AddIcon } from "@chakra-ui/icons";
 import imageCompression from "browser-image-compression";
-import Footer from "./components/Footer";
 
 function App() {
   const API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
-  const [data, setData] = useState(undefined);
+  const [data, setData] = useState("");
   const [photoURL, setPhotoURL] = useState("");
   const [isOpen, setIsOpen] = useState(false);
-  const [imageData, setImageData] = useState(null);
   const [inputText, setInputText] = useState("");
   const [loading, setLoading] = useState(false);
   const [imageFile, setImageFile] = useState(null);
+
+  const bgColor = useColorModeValue("gray.50", "gray.900");
+  const cardBgColor = useColorModeValue("white", "gray.800");
 
   async function fetchDataFromGeminiProVisionAPI(compressedFile) {
     try {
@@ -33,17 +49,7 @@ function App() {
       const imageParts = await Promise.all([
         fileToGenerativePart(compressedFile),
       ]);
-      const nonImageFiles = imageParts.filter(
-        (part) => !part.inlineData.mimeType.startsWith("image/")
-      );
-      if (nonImageFiles.length > 0) {
-        toast.error("Please upload only image files!");
-        setLoading(false);
-        return;
-      }
 
-      const imageDataURLs = imageParts.map((part) => part.inlineData.data);
-      setImageData(imageDataURLs);
       const photoDataURL = URL.createObjectURL(compressedFile);
       setPhotoURL(photoDataURL);
 
@@ -77,13 +83,17 @@ function App() {
 
   async function handleImageUpload(event) {
     try {
-      setImageFile(event.target.files[0]);
+      const file = event.target.files[0];
+      setImageFile(file);
+      const photoDataURL = URL.createObjectURL(file);
+      setPhotoURL(photoDataURL);
     } catch (error) {
       console.log(error);
+      toast.error("Error uploading image. Please try again.");
     }
   }
 
-  async function handleButtonClick() {
+  async function handleAnalyzeClick() {
     try {
       if (!imageFile) {
         toast.error("Please select an image!");
@@ -105,56 +115,85 @@ function App() {
       fetchDataFromGeminiProVisionAPI(compressedFile);
     } catch (error) {
       console.log(error);
+      toast.error("Error analyzing image. Please try again.");
     }
   }
 
   return (
-    <>
-      <Box bg="gray.800" color="white" height="100vh" paddingTop={130}>
-        <Container maxW="3xl" centerContent>
-          <Header></Header>
-          <div className="card">
-            <input
-              type="file"
-              accept="image/*"
-              onChange={(e) => handleImageUpload(e)}
-            ></input>
-            <Input
-              value={inputText}
-              onChange={(e) => setInputText(e.target.value)}
-              placeholder="Explain this image in around 50 words"
-              variant="filled"
-              marginBottom={4}
-              color="black"
-              bg="blue.700"
-              focusBackgroundColor="blue.700"
-              style={{ color: "white" }}
-            />
-            <Button
-              bg="blue.500"
-              color="black"
-              marginTop={4}
-              width="100%"
-              _hover={{ bg: "blue.700" }}
-              disabled={loading}
-              onClick={handleButtonClick}
-            >
-              {loading ? "Loading..." : "Extract Text"}
-            </Button>
-            <hr />
-          </div>
-          <KeywordsModal
-            keywords={data}
-            loading={loading}
-            isOpen={isOpen}
-            closeModal={closeModal}
-            imageData={photoURL}
-          />
-          <Footer />
-          <ToastContainer />
+    <ChakraProvider>
+      <Box bg={bgColor} minHeight="100vh" py={10}>
+        <Container maxW="xl">
+          <VStack spacing={8} align="stretch">
+            <Heading as="h1" size="xl" textAlign="center">
+              Image Analysis App
+            </Heading>
+            <Box bg={cardBgColor} p={6} borderRadius="lg" boxShadow="md">
+              <VStack spacing={4}>
+                <Button
+                  as="label"
+                  htmlFor="imageUpload"
+                  leftIcon={<Icon as={AddIcon} />}
+                  colorScheme="blue"
+                  cursor="pointer"
+                >
+                  Upload Image
+                  <input
+                    id="imageUpload"
+                    type="file"
+                    accept="image/*"
+                    onChange={handleImageUpload}
+                    style={{ display: "none" }}
+                  />
+                </Button>
+                {photoURL && (
+                  <Image
+                    src={photoURL}
+                    alt="Uploaded image"
+                    maxH="200px"
+                    objectFit="contain"
+                  />
+                )}
+                <Input
+                  value={inputText}
+                  onChange={(e) => setInputText(e.target.value)}
+                  placeholder="Explain this image in around 50 words"
+                  variant="filled"
+                />
+                <Button
+                  colorScheme="green"
+                  onClick={handleAnalyzeClick}
+                  isLoading={loading}
+                  loadingText="Analyzing..."
+                  width="full"
+                >
+                  Analyze Image
+                </Button>
+              </VStack>
+            </Box>
+          </VStack>
         </Container>
       </Box>
-    </>
+      <Modal isOpen={isOpen} onClose={closeModal} size="xl">
+        <ModalOverlay />
+        <ModalContent>
+          <ModalHeader>Image Analysis Result</ModalHeader>
+          <ModalCloseButton />
+          <ModalBody>
+            {photoURL && (
+              <Image
+                src={photoURL}
+                alt="Analyzed image"
+                maxH="300px"
+                objectFit="contain"
+                mb={4}
+              />
+            )}
+            <Text>{data}</Text>
+          </ModalBody>
+        </ModalContent>
+      </Modal>
+      <ToastContainer />
+    </ChakraProvider>
   );
 }
 
